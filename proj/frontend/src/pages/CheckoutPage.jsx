@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, CreditCard, Truck, Package, ChevronLeft, Lock, ArrowRight } from 'lucide-react';
+import { Check, CreditCard, Truck, Package, ChevronLeft, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
-import { siteConfig, colors as colorData } from '@/lib/data';
+import { colors as colorData } from '@/lib/data';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+// Determine API URL based on environment
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const steps = [
   { id: 1, name: 'Shipping', icon: Truck },
@@ -18,6 +21,8 @@ export default function CheckoutPage() {
   const { items, getSubtotal, clearCart } = useCartStore();
   const [currentStep, setCurrentStep] = useState(1);
   const [isComplete, setIsComplete] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderId, setOrderId] = useState('');
 
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
@@ -43,11 +48,6 @@ export default function CheckoutPage() {
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
 
-  const getColorHex = (colorId) => {
-    const color = colorData.find(c => c.id === colorId);
-    return color?.hex || '#888';
-  };
-
   const handleShippingChange = (field, value) => {
     setShippingInfo({ ...shippingInfo, [field]: value });
   };
@@ -64,12 +64,58 @@ export default function CheckoutPage() {
     }
     setPaymentInfo({ ...paymentInfo, [field]: value });
   };
+  console.log("DEBUG: My Backend URL is:", API_URL);
+  const handlePlaceOrder = async () => {
+    setIsSubmitting(true);
 
-  const handlePlaceOrder = () => {
-    setIsComplete(true);
-    setTimeout(() => {
-      clearCart();
-    }, 1000);
+    // 1. Prepare Payload
+    const orderPayload = {
+      shipping_info: shippingInfo,
+      payment_info: {
+        cardName: paymentInfo.cardName,
+        last4: paymentInfo.cardNumber.slice(-4) || "0000"
+      },
+      items: items.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        selectedSize: item.selectedSize || null,
+        selectedColor: item.selectedColor || null,
+        image: item.images?.[0] || null
+      })),
+      subtotal: subtotal,
+      shipping_cost: shipping,
+      tax: tax,
+      total: total
+    };
+
+    try {
+      // 2. Send to Backend
+      const response = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // 3. Success
+        setOrderId(data.order_id);
+        setIsComplete(true);
+        clearCart();
+      } else {
+        alert("Failed to place order: " + (data.detail || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Order error:", error);
+      alert("Could not connect to the server. Please check your connection.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (items.length === 0 && !isComplete) {
@@ -95,7 +141,7 @@ export default function CheckoutPage() {
           </motion.div>
           <h1 className="text-3xl md:text-4xl font-serif text-white mb-4">Order Confirmed!</h1>
           <p className="text-white/60 mb-2">Thank you for your purchase.</p>
-          <p className="text-white/60 mb-8">Order #LX{Math.random().toString(36).substr(2, 9).toUpperCase()}</p>
+          <p className="text-white/60 mb-8">Order #{orderId}</p>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -401,13 +447,23 @@ export default function CheckoutPage() {
                   </div>
 
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={!isSubmitting ? { scale: 1.02 } : {}}
+                    whileTap={!isSubmitting ? { scale: 0.98 } : {}}
                     onClick={handlePlaceOrder}
-                    className="w-full py-4 bg-amber-400 text-black font-medium rounded-full mt-8 flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                    className="w-full py-4 bg-amber-400 text-black font-medium rounded-full mt-8 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Place Order - ${total.toLocaleString()}
-                    <Check size={18} />
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="animate-spin" size={18} />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Place Order - ${total.toLocaleString()}
+                        <Check size={18} />
+                      </>
+                    )}
                   </motion.button>
                 </motion.div>
               )}
