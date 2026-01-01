@@ -17,7 +17,7 @@ const footerLinks = {
   ],
   company: [
     { label: 'About Us', href: '/about' },
-    { label: 'Careers', href: '/careers' },
+    // Careers link removed as requested
     { label: 'Press', href: '/press' },
     { label: 'Sustainability', href: '/sustainability' },
   ],
@@ -40,6 +40,11 @@ const socialLinks = [
 export default function Footer() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
+
+  // Function to force scroll to top on click
+  const handleScrollToTop = () => {
+    window.scrollTo(0, 0);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -136,7 +141,11 @@ export default function Footer() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <Link to="/" className="text-3xl font-serif font-bold text-white mb-6 block">
+            <Link 
+              to="/" 
+              onClick={handleScrollToTop}
+              className="text-3xl font-serif font-bold text-white mb-6 block"
+            >
               {siteConfig.name}
             </Link>
             <p className="text-white/60 mb-6">{siteConfig.description}</p>
@@ -172,6 +181,7 @@ export default function Footer() {
                   <li key={link.label}>
                     <Link
                       to={link.href}
+                      onClick={handleScrollToTop} // Added click handler here
                       className="text-white/60 hover:text-amber-400 transition-colors"
                     >
                       {link.label}
@@ -189,8 +199,20 @@ export default function Footer() {
             © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-white/40">
-            <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-            <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+            <Link 
+              to="/privacy" 
+              onClick={handleScrollToTop}
+              className="hover:text-white transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <Link 
+              to="/terms" 
+              onClick={handleScrollToTop}
+              className="hover:text-white transition-colors"
+            >
+              Terms of Service
+            </Link>
           </div>
         </div>
       </div>
