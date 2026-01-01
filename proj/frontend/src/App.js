@@ -24,6 +24,8 @@ import ShippingPage from "./pages/ShippingPage";
 import ReturnsPage from "./pages/ReturnsPage";
 import FAQPage from "./pages/FAQPage";
 import SizeGuidePage from "./pages/SizeGuidePage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsPage from "./pages/TermsPage";
 
 // ScrollToTop Component to handle scroll reset on route change
 function ScrollToTop() {
@@ -61,6 +63,8 @@ function App() {
           <Route path="/returns" element={<ReturnsPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/size-guide" element={<SizeGuidePage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
         </Routes>
         
         <Footer />

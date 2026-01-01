@@ -17,7 +17,7 @@ const footerLinks = {
   ],
   company: [
     { label: 'About Us', href: '/about' },
-    // Careers link removed as requested
+    // Careers link removed
     { label: 'Press', href: '/press' },
     { label: 'Sustainability', href: '/sustainability' },
   ],
@@ -41,9 +41,9 @@ export default function Footer() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
 
-  // Function to force scroll to top on click
+  // Function to smooth scroll to top on click
   const handleScrollToTop = () => {
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e) => {
@@ -181,7 +181,7 @@ export default function Footer() {
                   <li key={link.label}>
                     <Link
                       to={link.href}
-                      onClick={handleScrollToTop} // Added click handler here
+                      onClick={handleScrollToTop}
                       className="text-white/60 hover:text-amber-400 transition-colors"
                     >
                       {link.label}
