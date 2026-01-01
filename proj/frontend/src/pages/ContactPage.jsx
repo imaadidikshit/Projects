@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
-import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+
+// Determine API URL
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -11,13 +14,30 @@ export default function ContactPage() {
     subject: '',
     message: '',
   });
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle, loading, success, error
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
-    setFormData({ name: '', email: '', subject: '', message: '' });
+    setStatus('loading');
+
+    try {
+      const res = await fetch(`${API_URL}/api/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setStatus('success');
+        setFormData({ name: '', email: '', subject: '', message: '' });
+        setTimeout(() => setStatus('idle'), 3000);
+      } else {
+        setStatus('error');
+      }
+    } catch (error) {
+      console.error("Contact form error:", error);
+      setStatus('error');
+    }
   };
 
   const contactInfo = [
@@ -61,6 +81,7 @@ export default function ContactPage() {
                     placeholder="Your Name"
                     className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-14"
                     required
+                    disabled={status === 'loading'}
                   />
                 </div>
                 <div>
@@ -71,6 +92,7 @@ export default function ContactPage() {
                     placeholder="Your Email"
                     className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-14"
                     required
+                    disabled={status === 'loading'}
                   />
                 </div>
               </div>
@@ -81,6 +103,7 @@ export default function ContactPage() {
                 placeholder="Subject"
                 className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-14"
                 required
+                disabled={status === 'loading'}
               />
 
               <Textarea
@@ -90,20 +113,29 @@ export default function ContactPage() {
                 rows={6}
                 className="bg-white/5 border-white/10 text-white placeholder:text-white/40 resize-none"
                 required
+                disabled={status === 'loading'}
               />
 
               <motion.button
                 type="submit"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={status !== 'loading' ? { scale: 1.02 } : {}}
+                whileTap={status !== 'loading' ? { scale: 0.98 } : {}}
+                disabled={status === 'loading'}
                 className={`w-full py-4 font-medium rounded-full flex items-center justify-center gap-2 transition-colors ${
-                  submitted
-                    ? 'bg-green-500 text-white'
-                    : 'bg-amber-400 text-black hover:bg-amber-300'
+                  status === 'success' ? 'bg-green-500 text-white' : 
+                  status === 'error' ? 'bg-red-500 text-white' :
+                  'bg-amber-400 text-black hover:bg-amber-300'
                 }`}
               >
-                {submitted ? (
+                {status === 'loading' ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Sending...
+                  </>
+                ) : status === 'success' ? (
                   'Message Sent!'
+                ) : status === 'error' ? (
+                  'Error - Try Again'
                 ) : (
                   <>
                     Send Message

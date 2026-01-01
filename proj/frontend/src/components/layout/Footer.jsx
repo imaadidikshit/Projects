@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Instagram, Twitter, Facebook, Youtube, ArrowRight } from 'lucide-react';
+import { Instagram, Twitter, Facebook, Youtube, ArrowRight, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { siteConfig } from '@/lib/data';
+
+// Determine API URL
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const footerLinks = {
   shop: [
@@ -36,14 +39,31 @@ const socialLinks = [
 
 export default function Footer() {
   const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle, loading, success, error
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (email) {
-      setSubscribed(true);
-      setEmail('');
-      setTimeout(() => setSubscribed(false), 3000);
+    if (!email) return;
+
+    setStatus('loading');
+
+    try {
+      const res = await fetch(`${API_URL}/api/newsletter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (res.ok) {
+        setStatus('success');
+        setEmail('');
+        setTimeout(() => setStatus('idle'), 3000);
+      } else {
+        setStatus('error');
+      }
+    } catch (error) {
+      console.error("Newsletter error:", error);
+      setStatus('error');
     }
   };
 
@@ -79,17 +99,32 @@ export default function Footer() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Your email address"
-                className="w-full px-6 py-4 bg-white/5 border border-white/20 rounded-full text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400 transition-colors"
+                disabled={status === 'loading' || status === 'success'}
+                className="w-full px-6 py-4 bg-white/5 border border-white/20 rounded-full text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400 transition-colors disabled:opacity-50"
               />
             </div>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               type="submit"
-              className="px-8 py-4 bg-amber-400 text-black font-medium rounded-full flex items-center gap-2 hover:bg-amber-300 transition-colors"
+              disabled={status === 'loading' || status === 'success'}
+              className={`px-8 py-4 font-medium rounded-full flex items-center gap-2 transition-colors ${
+                status === 'success' ? 'bg-green-500 text-white' : 
+                status === 'error' ? 'bg-red-500 text-white' :
+                'bg-amber-400 text-black hover:bg-amber-300'
+              }`}
             >
-              {subscribed ? 'Subscribed!' : 'Subscribe'}
-              <ArrowRight size={18} />
+              {status === 'loading' ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : status === 'success' ? (
+                'Subscribed!'
+              ) : status === 'error' ? (
+                'Retry'
+              ) : (
+                <>
+                  Subscribe <ArrowRight size={18} />
+                </>
+              )}
             </motion.button>
           </motion.form>
         </div>

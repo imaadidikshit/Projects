@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, CreditCard, Truck, Package, ChevronLeft, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
-import { colors as colorData } from '@/lib/data';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// Determine API URL based on environment
+// Determine API URL (Make sure your .env has REACT_APP_API_URL)
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const steps = [
@@ -24,6 +23,7 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState('');
 
+  // Form State
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
     lastName: '',
@@ -43,37 +43,111 @@ export default function CheckoutPage() {
     cvv: '',
   });
 
+  // Validation Errors State
+  const [errors, setErrors] = useState({});
+
   const subtotal = getSubtotal();
   const shipping = subtotal >= 500 ? 0 : 25;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
 
+  // --- Validation Logic ---
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validatePhone = (phone) => /^\+?[\d\s-]{10,}$/.test(phone);
+  const validateCard = (num) => /^\d{16}$/.test(num.replace(/\s/g, ''));
+  const validateCVV = (cvv) => /^\d{3,4}$/.test(cvv);
+  const validateExpiry = (exp) => /^(0[1-9]|1[0-2])\/\d{2}$/.test(exp);
+
+  const validateStep1 = () => {
+    const newErrors = {};
+    if (!shippingInfo.firstName) newErrors.firstName = "First name is required";
+    if (!shippingInfo.lastName) newErrors.lastName = "Last name is required";
+    if (!shippingInfo.address) newErrors.address = "Address is required";
+    if (!shippingInfo.city) newErrors.city = "City is required";
+    if (!shippingInfo.state) newErrors.state = "State is required";
+    if (!shippingInfo.zip) newErrors.zip = "ZIP code is required";
+    
+    if (!shippingInfo.email) {
+      newErrors.email = "Email is required";
+    } else if (!validateEmail(shippingInfo.email)) {
+      newErrors.email = "Invalid email format";
+    }
+
+    if (!shippingInfo.phone) {
+      newErrors.phone = "Phone is required";
+    } else if (!validatePhone(shippingInfo.phone)) {
+      newErrors.phone = "Invalid phone format (min 10 digits)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStep2 = () => {
+    const newErrors = {};
+    if (!paymentInfo.cardName) newErrors.cardName = "Name on card is required";
+    
+    if (!paymentInfo.cardNumber) {
+      newErrors.cardNumber = "Card number is required";
+    } else if (!validateCard(paymentInfo.cardNumber)) {
+      newErrors.cardNumber = "Invalid card number (must be 16 digits)";
+    }
+
+    if (!paymentInfo.expiry) {
+      newErrors.expiry = "Expiry is required";
+    } else if (!validateExpiry(paymentInfo.expiry)) {
+      newErrors.expiry = "Invalid format (MM/YY)";
+    }
+
+    if (!paymentInfo.cvv) {
+      newErrors.cvv = "CVV is required";
+    } else if (!validateCVV(paymentInfo.cvv)) {
+      newErrors.cvv = "Invalid CVV (3 or 4 digits)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // --- Handlers ---
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (validateStep1()) setCurrentStep(2);
+    } else if (currentStep === 2) {
+      if (validateStep2()) setCurrentStep(3);
+    }
+  };
+
   const handleShippingChange = (field, value) => {
     setShippingInfo({ ...shippingInfo, [field]: value });
+    // Clear error when user types
+    if (errors[field]) setErrors({ ...errors, [field]: null });
   };
 
   const handlePaymentChange = (field, value) => {
+    let formattedValue = value;
     if (field === 'cardNumber') {
-      value = value.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19);
+      formattedValue = value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})/g, '$1 ').trim();
     }
     if (field === 'expiry') {
-      value = value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1/$2').slice(0, 5);
+      formattedValue = value.replace(/\D/g, '').slice(0, 4).replace(/(\d{2})(\d)/, '$1/$2');
     }
     if (field === 'cvv') {
-      value = value.replace(/\D/g, '').slice(0, 4);
+      formattedValue = value.replace(/\D/g, '').slice(0, 4);
     }
-    setPaymentInfo({ ...paymentInfo, [field]: value });
+    setPaymentInfo({ ...paymentInfo, [field]: formattedValue });
+    if (errors[field]) setErrors({ ...errors, [field]: null });
   };
-  console.log("DEBUG: My Backend URL is:", API_URL);
+
   const handlePlaceOrder = async () => {
     setIsSubmitting(true);
 
-    // 1. Prepare Payload
     const orderPayload = {
       shipping_info: shippingInfo,
       payment_info: {
         cardName: paymentInfo.cardName,
-        last4: paymentInfo.cardNumber.slice(-4) || "0000"
+        last4: paymentInfo.cardNumber.replace(/\s/g, '').slice(-4) || "0000"
       },
       items: items.map(item => ({
         id: item.id,
@@ -91,19 +165,15 @@ export default function CheckoutPage() {
     };
 
     try {
-      // 2. Send to Backend
       const response = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // 3. Success
         setOrderId(data.order_id);
         setIsComplete(true);
         clearCart();
@@ -112,7 +182,7 @@ export default function CheckoutPage() {
       }
     } catch (error) {
       console.error("Order error:", error);
-      alert("Could not connect to the server. Please check your connection.");
+      alert("Could not connect to the server.");
     } finally {
       setIsSubmitting(false);
     }
@@ -226,9 +296,10 @@ export default function CheckoutPage() {
                         id="firstName"
                         value={shippingInfo.firstName}
                         onChange={(e) => handleShippingChange('firstName', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.firstName ? 'border-red-500' : ''}`}
                         placeholder="John"
                       />
+                      {errors.firstName && <span className="text-red-500 text-sm">{errors.firstName}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName" className="text-white/70">Last Name</Label>
@@ -236,9 +307,10 @@ export default function CheckoutPage() {
                         id="lastName"
                         value={shippingInfo.lastName}
                         onChange={(e) => handleShippingChange('lastName', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.lastName ? 'border-red-500' : ''}`}
                         placeholder="Doe"
                       />
+                      {errors.lastName && <span className="text-red-500 text-sm">{errors.lastName}</span>}
                     </div>
                   </div>
 
@@ -250,9 +322,10 @@ export default function CheckoutPage() {
                         type="email"
                         value={shippingInfo.email}
                         onChange={(e) => handleShippingChange('email', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.email ? 'border-red-500' : ''}`}
                         placeholder="john@example.com"
                       />
+                      {errors.email && <span className="text-red-500 text-sm">{errors.email}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone" className="text-white/70">Phone</Label>
@@ -260,9 +333,10 @@ export default function CheckoutPage() {
                         id="phone"
                         value={shippingInfo.phone}
                         onChange={(e) => handleShippingChange('phone', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.phone ? 'border-red-500' : ''}`}
                         placeholder="+1 (555) 123-4567"
                       />
+                      {errors.phone && <span className="text-red-500 text-sm">{errors.phone}</span>}
                     </div>
                   </div>
 
@@ -272,9 +346,10 @@ export default function CheckoutPage() {
                       id="address"
                       value={shippingInfo.address}
                       onChange={(e) => handleShippingChange('address', e.target.value)}
-                      className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                      className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.address ? 'border-red-500' : ''}`}
                       placeholder="123 Main Street"
                     />
+                    {errors.address && <span className="text-red-500 text-sm">{errors.address}</span>}
                   </div>
 
                   <div className="grid sm:grid-cols-3 gap-4">
@@ -284,9 +359,10 @@ export default function CheckoutPage() {
                         id="city"
                         value={shippingInfo.city}
                         onChange={(e) => handleShippingChange('city', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.city ? 'border-red-500' : ''}`}
                         placeholder="New York"
                       />
+                      {errors.city && <span className="text-red-500 text-sm">{errors.city}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="state" className="text-white/70">State</Label>
@@ -294,9 +370,10 @@ export default function CheckoutPage() {
                         id="state"
                         value={shippingInfo.state}
                         onChange={(e) => handleShippingChange('state', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.state ? 'border-red-500' : ''}`}
                         placeholder="NY"
                       />
+                      {errors.state && <span className="text-red-500 text-sm">{errors.state}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="zip" className="text-white/70">ZIP Code</Label>
@@ -304,16 +381,17 @@ export default function CheckoutPage() {
                         id="zip"
                         value={shippingInfo.zip}
                         onChange={(e) => handleShippingChange('zip', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.zip ? 'border-red-500' : ''}`}
                         placeholder="10001"
                       />
+                      {errors.zip && <span className="text-red-500 text-sm">{errors.zip}</span>}
                     </div>
                   </div>
 
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setCurrentStep(2)}
+                    onClick={handleNextStep}
                     className="w-full py-4 bg-amber-400 text-black font-medium rounded-full mt-8 flex items-center justify-center gap-2"
                   >
                     Continue to Payment
@@ -344,9 +422,11 @@ export default function CheckoutPage() {
                       id="cardNumber"
                       value={paymentInfo.cardNumber}
                       onChange={(e) => handlePaymentChange('cardNumber', e.target.value)}
-                      className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                      className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.cardNumber ? 'border-red-500' : ''}`}
                       placeholder="4242 4242 4242 4242"
+                      maxLength={19}
                     />
+                    {errors.cardNumber && <span className="text-red-500 text-sm">{errors.cardNumber}</span>}
                   </div>
 
                   <div className="space-y-2">
@@ -355,9 +435,10 @@ export default function CheckoutPage() {
                       id="cardName"
                       value={paymentInfo.cardName}
                       onChange={(e) => handlePaymentChange('cardName', e.target.value)}
-                      className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                      className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.cardName ? 'border-red-500' : ''}`}
                       placeholder="JOHN DOE"
                     />
+                    {errors.cardName && <span className="text-red-500 text-sm">{errors.cardName}</span>}
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -367,9 +448,11 @@ export default function CheckoutPage() {
                         id="expiry"
                         value={paymentInfo.expiry}
                         onChange={(e) => handlePaymentChange('expiry', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.expiry ? 'border-red-500' : ''}`}
                         placeholder="MM/YY"
+                        maxLength={5}
                       />
+                      {errors.expiry && <span className="text-red-500 text-sm">{errors.expiry}</span>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cvv" className="text-white/70">CVV</Label>
@@ -378,21 +461,33 @@ export default function CheckoutPage() {
                         type="password"
                         value={paymentInfo.cvv}
                         onChange={(e) => handlePaymentChange('cvv', e.target.value)}
-                        className="bg-white/5 border-white/10 text-white focus:border-amber-400"
+                        className={`bg-white/5 border-white/10 text-white focus:border-amber-400 ${errors.cvv ? 'border-red-500' : ''}`}
                         placeholder="•••"
+                        maxLength={4}
                       />
+                      {errors.cvv && <span className="text-red-500 text-sm">{errors.cvv}</span>}
                     </div>
                   </div>
 
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setCurrentStep(3)}
-                    className="w-full py-4 bg-amber-400 text-black font-medium rounded-full mt-8 flex items-center justify-center gap-2"
-                  >
-                    Review Order
-                    <ArrowRight size={18} />
-                  </motion.button>
+                  <div className="flex gap-4 mt-8">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setCurrentStep(1)}
+                      className="flex-1 py-4 bg-white/10 text-white font-medium rounded-full flex items-center justify-center gap-2"
+                    >
+                      Back
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleNextStep}
+                      className="flex-1 py-4 bg-amber-400 text-black font-medium rounded-full flex items-center justify-center gap-2"
+                    >
+                      Review Order
+                      <ArrowRight size={18} />
+                    </motion.button>
+                  </div>
                 </motion.div>
               )}
 
@@ -423,7 +518,7 @@ export default function CheckoutPage() {
                     <h3 className="text-white font-medium mb-3">Payment Method</h3>
                     <p className="text-white/70 flex items-center gap-2">
                       <CreditCard size={18} />
-                      •••• •••• •••• {paymentInfo.cardNumber.slice(-4)}
+                      •••• •••• •••• {paymentInfo.cardNumber.replace(/\s/g, '').slice(-4)}
                     </p>
                   </div>
 
@@ -446,25 +541,36 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  <motion.button
-                    whileHover={!isSubmitting ? { scale: 1.02 } : {}}
-                    whileTap={!isSubmitting ? { scale: 0.98 } : {}}
-                    onClick={handlePlaceOrder}
-                    disabled={isSubmitting}
-                    className="w-full py-4 bg-amber-400 text-black font-medium rounded-full mt-8 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="animate-spin" size={18} />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        Place Order - ${total.toLocaleString()}
-                        <Check size={18} />
-                      </>
-                    )}
-                  </motion.button>
+                  <div className="flex gap-4 mt-8">
+                     <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setCurrentStep(2)}
+                      disabled={isSubmitting}
+                      className="flex-1 py-4 bg-white/10 text-white font-medium rounded-full flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      Back
+                    </motion.button>
+                    <motion.button
+                      whileHover={!isSubmitting ? { scale: 1.02 } : {}}
+                      whileTap={!isSubmitting ? { scale: 0.98 } : {}}
+                      onClick={handlePlaceOrder}
+                      disabled={isSubmitting}
+                      className="flex-[2] py-4 bg-amber-400 text-black font-medium rounded-full flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="animate-spin" size={18} />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          Place Order - ${total.toLocaleString()}
+                          <Check size={18} />
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
