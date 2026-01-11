@@ -164,6 +164,7 @@ export default function AboutPage() {
             </motion.button>
           </Link>
         </motion.div>
+        <script src="https://trustflow-nu.vercel.app/embed.js" data-space-id="2e689c9c-1430-4404-8240-7649f5a77920"></script>
       </section>
     </main>
   );
