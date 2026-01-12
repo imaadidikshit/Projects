@@ -12,6 +12,7 @@ export default function HomePage() {
       <Marquee />
       <TrendingSection />
       <CategoryShowcase />
+      <div id="trustflow-widget"></div>
     </main>
   );
 }
