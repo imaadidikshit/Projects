@@ -97,6 +97,7 @@ export default function HeroSection() {
               onMouseEnter={() => setCursorVariant('hover')}
               onMouseLeave={() => setCursorVariant('default')}
               className="group px-8 py-4 bg-amber-400 text-black font-medium rounded-full flex items-center gap-3 hover:bg-amber-300 transition-all"
+              data-tf-conversion="true"
             >
               Explore Collection
               <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
